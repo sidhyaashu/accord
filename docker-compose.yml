@@ -1,0 +1,13 @@
+services:
+  api_ingestion:
+    build: .
+    container_name: api_ingestion_service
+    environment:
+      DATABASE_URL: postgresql+psycopg2://admin:password123@host.docker.internal:5432/financial_db
+      ACCORD_API_TOKEN: your_real_token_here
+      API_DATE: ""   # optional ddmmyyyy, empty means today
+      API_MODE: "real"   # real or mock
+      ETL_BATCH_SIZE: "50000"
+    volumes:
+      - .:/app
+    command: ["python", "-m", "app.api_main"]
