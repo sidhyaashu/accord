@@ -50,5 +50,17 @@ services:
       db:
         condition: service_healthy
 
+  healthcheck_manual:
+    build: .
+    container_name: api_healthcheck
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    command: ["python", "-m", "app.healthcheck"]
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pg_data:

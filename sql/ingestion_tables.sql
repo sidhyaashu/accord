@@ -27,6 +27,14 @@ ALTER TABLE rejected_ingestion_rows ADD COLUMN IF NOT EXISTS retry_count INT DEF
 ALTER TABLE rejected_ingestion_rows ADD COLUMN IF NOT EXISTS resolved BOOLEAN DEFAULT FALSE;
 ALTER TABLE rejected_ingestion_rows ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP NULL;
 ALTER TABLE rejected_ingestion_rows ADD COLUMN IF NOT EXISTS last_retry_at TIMESTAMP NULL;
+ALTER TABLE rejected_ingestion_rows ADD COLUMN IF NOT EXISTS payload_hash TEXT;
+
+-- Backfill hash for existing rows that may not have it
+UPDATE rejected_ingestion_rows SET payload_hash = encode(sha256(row_payload::text::bytea), 'hex') WHERE payload_hash IS NULL;
+
+-- Now make it NOT NULL and add unique constraint
+ALTER TABLE rejected_ingestion_rows ALTER COLUMN payload_hash SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uix_rejected_feed_date_hash ON rejected_ingestion_rows (feed_name, requested_date, payload_hash);
 
 CREATE TABLE IF NOT EXISTS daily_ingestion_summary (
     summary_date DATE PRIMARY KEY,

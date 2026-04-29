@@ -2,6 +2,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from app.api_main import run_incremental_for_feeds
 from app.db import build_engine
 from app.retry_service import retry_rejected_rows
+from app.cleanup_service import cleanup_old_raw_payloads
 
 
 COMPANY_MASTER_FEEDS = [
@@ -52,6 +53,12 @@ from app.config import (
     RESULTS_FINAL_HOUR, RESULTS_FINAL_MINUTE,
     EOD_HOUR, EOD_MINUTE, EOD_RETRY_HOUR, EOD_RETRY_MINUTE
 )
+
+def run_daily_cleanup():
+    engine = build_engine()
+    print("\n🧹 Running raw payload cleanup...")
+    deleted = cleanup_old_raw_payloads(engine)
+    print(f"🧹 Cleanup done: {deleted} rows purged.")
 
 def run_feeds_with_retry(feeds: list[str]):
     run_incremental_for_feeds(feeds)
@@ -110,6 +117,16 @@ def main():
         hour=EOD_RETRY_HOUR,
         minute=EOD_RETRY_MINUTE,
         id="eod_retry_2330",
+        replace_existing=True,
+    )
+
+    # Daily raw payload cleanup at 2:30 AM
+    scheduler.add_job(
+        run_daily_cleanup,
+        "cron",
+        hour=2,
+        minute=30,
+        id="daily_raw_payload_cleanup",
         replace_existing=True,
     )
 

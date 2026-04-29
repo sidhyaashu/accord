@@ -6,7 +6,7 @@ from sqlalchemy import inspect
 from app.accord_client import fetch_accord_feed
 from app.config import (
     ACCORD_API_TOKEN, API_DATE, LOAD_ORDER, PRIMARY_KEYS, 
-    ENABLE_IDEMPOTENCY, MAX_CONSECUTIVE_FAILURES, LOG_RAW_PAYLOAD
+    ENABLE_IDEMPOTENCY, MAX_FEED_CONSECUTIVE_FAILURES, LOG_RAW_PAYLOAD
 )
 from app.db import build_engine, wait_for_db
 from app.ingestion_log import create_ingestion_tables, log_run, save_raw_payload, has_successful_run, update_daily_summary
@@ -28,17 +28,17 @@ def run_incremental_for_feeds(feeds: list[str], override_date: str = None, force
     print(f"\n🚀 Starting ingestion for date={date_ddmmyyyy}")
     print(f"Feeds: {feeds}")
 
-    consecutive_failures = 0
+    feed_failures: dict[str, int] = {}
 
     for feed_name in feeds:
         if ENABLE_IDEMPOTENCY and not force and has_successful_run(engine, feed_name, requested_date):
             print(f"\n⏭️ Skipping {feed_name} for {date_ddmmyyyy} (already successful)")
             continue
 
-        if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-            print(f"\n🛑 Circuit breaker activated: {MAX_CONSECUTIVE_FAILURES} consecutive failures reached.")
-            send_alert("Circuit Breaker Activated", f"Skipping remaining feeds due to consecutive failures.")
-            break
+        if feed_failures.get(feed_name, 0) >= MAX_FEED_CONSECUTIVE_FAILURES:
+            print(f"\n🛑 Skipping {feed_name}: {MAX_FEED_CONSECUTIVE_FAILURES} consecutive failures reached for this feed.")
+            send_alert("Feed Circuit Breaker", f"{feed_name} skipped after {MAX_FEED_CONSECUTIVE_FAILURES} consecutive failures.")
+            continue
 
         success = process_single_feed(
             engine=engine,
@@ -47,9 +47,12 @@ def run_incremental_for_feeds(feeds: list[str], override_date: str = None, force
             requested_date=requested_date,
         )
         if success:
-            consecutive_failures = 0
+            feed_failures[feed_name] = 0
         else:
-            consecutive_failures += 1
+            feed_failures[feed_name] = feed_failures.get(feed_name, 0) + 1
+
+    # Single summary write per full feed loop (not per feed)
+    update_daily_summary(engine, requested_date)
 
 def process_single_feed(engine, feed_name: str, date_ddmmyyyy: str, requested_date) -> bool:
     print(f"\n🌐 Feed: {feed_name}")
@@ -60,7 +63,6 @@ def process_single_feed(engine, feed_name: str, date_ddmmyyyy: str, requested_da
         msg = f"No DB table found for feed={feed_name}"
         print(f"❌ {msg}")
         log_run(engine, feed_name, requested_date, "TABLE_NOT_FOUND", error_message=msg)
-        update_daily_summary(engine, requested_date)
         return False
 
     start_time = time.time()
@@ -71,7 +73,6 @@ def process_single_feed(engine, feed_name: str, date_ddmmyyyy: str, requested_da
             print("⏭️ No incremental data")
             duration = int(time.time() - start_time)
             log_run(engine, feed_name, requested_date, "NO_CONTENT", http_status=http_status, duration_seconds=duration)
-            update_daily_summary(engine, requested_date)
             return True
 
         if http_status in (403, 404):
@@ -80,7 +81,6 @@ def process_single_feed(engine, feed_name: str, date_ddmmyyyy: str, requested_da
             send_alert(f"API Error {http_status}", f"{feed_name} returned {http_status}")
             duration = int(time.time() - start_time)
             log_run(engine, feed_name, requested_date, "API_ERROR", http_status=http_status, error_message=msg, duration_seconds=duration)
-            update_daily_summary(engine, requested_date)
             return False
 
         if LOG_RAW_PAYLOAD and http_status != 204:
@@ -91,7 +91,6 @@ def process_single_feed(engine, feed_name: str, date_ddmmyyyy: str, requested_da
         if df.empty:
             duration = int(time.time() - start_time)
             log_run(engine, feed_name, requested_date, "EMPTY", http_status=http_status, duration_seconds=duration)
-            update_daily_summary(engine, requested_date)
             return True
 
         df = apply_renames(df, feed_name)
@@ -108,7 +107,6 @@ def process_single_feed(engine, feed_name: str, date_ddmmyyyy: str, requested_da
             send_alert("Validation Failed", f"{feed_name}: {error_str}")
             duration = int(time.time() - start_time)
             log_run(engine, feed_name, requested_date, "FAILED", error_message=error_str, duration_seconds=duration)
-            update_daily_summary(engine, requested_date)
             return False
 
         upserted, deleted, rejected = process_dataframe(
@@ -136,8 +134,7 @@ def process_single_feed(engine, feed_name: str, date_ddmmyyyy: str, requested_da
         print(f"✅ Success: received={len(df)}, upserted={upserted}, deleted={deleted}, rejected={rejected}")
         if rejected > 0:
             send_alert("Rows Rejected", f"{feed_name} had {rejected} rows rejected")
-            
-        update_daily_summary(engine, requested_date)
+
         return True
 
     except Exception as e:
@@ -145,7 +142,6 @@ def process_single_feed(engine, feed_name: str, date_ddmmyyyy: str, requested_da
         print(f"❌ Failed feed={feed_name}: {e}")
         send_alert("Feed Failure", f"{feed_name} failed: {str(e)}")
         log_run(engine, feed_name, requested_date, "FAILED", error_message=str(e), duration_seconds=duration)
-        update_daily_summary(engine, requested_date)
         return False
 
 def fetch_feed(feed_name: str, date_ddmmyyyy: str):

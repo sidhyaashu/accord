@@ -1,3 +1,5 @@
+import hashlib
+import json
 import pandas as pd
 from datetime import date
 from sqlalchemy import inspect, text
@@ -125,14 +127,22 @@ def process_dataframe(
                     or 0
                 )
                 if rejected_count > 0:
+                    # insert with payload hash for deduplication
                     conn.execute(
                         text(f"""
-                            INSERT INTO rejected_ingestion_rows (feed_name, requested_date, reason, row_payload)
-                            SELECT :feed_name, :requested_date, 'Missing fincode in company_master', row_to_json(s.*)::jsonb
+                            INSERT INTO rejected_ingestion_rows
+                                (feed_name, requested_date, reason, row_payload, payload_hash)
+                            SELECT
+                                :feed_name,
+                                :requested_date,
+                                'Missing fincode in company_master',
+                                row_to_json(s.*)::jsonb,
+                                encode(sha256(row_to_json(s.*)::text::bytea), 'hex')
                             FROM "{staging_table}" s
                             WHERE NOT EXISTS (SELECT 1 FROM company_master cm WHERE cm.fincode = s.fincode)
+                            ON CONFLICT (feed_name, requested_date, payload_hash) DO NOTHING
                         """),
-                        {"feed_name": feed_name, "requested_date": requested_date}
+                        {{"feed_name": feed_name, "requested_date": requested_date}}
                     )
                     conn.execute(
                         text(f'''
