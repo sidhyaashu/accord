@@ -27,28 +27,4 @@ def fetch_accord_feed(filename: str, date_ddmmyyyy: str, token: str) -> tuple[in
 
     raise RuntimeError(
         f"Unexpected API status={response.status_code}, body={response.text[:300]}"
-    )
-
-
-def mock_fetch_feed(filename: str) -> tuple[int, dict | None]:
-    if filename != "Company_master":
-        return 204, None
-
-    return 200, {
-        "Table": [
-            {
-                "FINCODE": 1001,
-                "COMPNAME": "Dummy Updated Company Ltd",
-                "SYMBOL": "DUMMY",
-                "STATUS": "Active",
-                "FLAG": "O",
-            },
-            {
-                "FINCODE": 999999,
-                "COMPNAME": "New API Company Ltd",
-                "SYMBOL": "NEWAPI",
-                "STATUS": "Active",
-                "FLAG": "A",
-            },
-        ]
-    }
+    )

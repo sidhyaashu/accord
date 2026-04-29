@@ -48,6 +48,8 @@ def log_run(
     rows_received: int = 0,
     rows_upserted: int = 0,
     rows_deleted: int = 0,
+    rows_rejected: int = 0,
+    duration_seconds: int = 0,
     error_message: str | None = None,
 ) -> None:
     with engine.begin() as conn:
@@ -55,12 +57,12 @@ def log_run(
             text("""
                 INSERT INTO ingestion_runs
                 (feed_name, requested_date, status, http_status,
-                 rows_received, rows_upserted, rows_deleted,
-                 error_message, finished_at)
+                 rows_received, rows_upserted, rows_deleted, rows_rejected,
+                 duration_seconds, error_message, finished_at)
                 VALUES
                 (:feed_name, :requested_date, :status, :http_status,
-                 :rows_received, :rows_upserted, :rows_deleted,
-                 :error_message, now())
+                 :rows_received, :rows_upserted, :rows_deleted, :rows_rejected,
+                 :duration_seconds, :error_message, now())
             """),
             {
                 "feed_name": feed_name,
@@ -70,6 +72,8 @@ def log_run(
                 "rows_received": rows_received,
                 "rows_upserted": rows_upserted,
                 "rows_deleted": rows_deleted,
+                "rows_rejected": rows_rejected,
+                "duration_seconds": duration_seconds,
                 "error_message": error_message[:1000] if error_message else None,
             },
         )

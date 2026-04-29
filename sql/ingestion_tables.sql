@@ -7,11 +7,21 @@ CREATE TABLE IF NOT EXISTS ingestion_runs (
     rows_received INT DEFAULT 0,
     rows_upserted INT DEFAULT 0,
     rows_deleted INT DEFAULT 0,
+    rows_rejected INT DEFAULT 0,
+    duration_seconds INT DEFAULT 0,
     error_message TEXT,
     started_at TIMESTAMP DEFAULT now(),
     finished_at TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS rejected_ingestion_rows (
+    id BIGSERIAL PRIMARY KEY,
+    feed_name TEXT NOT NULL,
+    requested_date DATE NOT NULL,
+    reason TEXT NOT NULL,
+    row_payload JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS raw_api_payloads (
     id BIGSERIAL PRIMARY KEY,
     feed_name TEXT NOT NULL,

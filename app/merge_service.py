@@ -1,4 +1,5 @@
 import pandas as pd
+from datetime import date
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
@@ -74,7 +75,9 @@ def process_dataframe(
     engine: Engine,
     table_name: str,
     df: pd.DataFrame,
-) -> tuple[int, int]:
+    feed_name: str,
+    requested_date: date,
+) -> tuple[int, int, int]:
     table_name = table_name.lower()
 
     if table_name not in PRIMARY_KEYS:
@@ -99,6 +102,9 @@ def process_dataframe(
 
     total_upserted = 0
     total_deleted = 0
+    total_rejected = 0
+    
+    has_fincode_fk = "fincode" in df.columns and table_name != "company_master"
 
     for chunk in chunk_dataframe(df, ETL_BATCH_SIZE):
         with engine.begin() as conn:
@@ -110,6 +116,28 @@ def process_dataframe(
                 staging_table=staging_table,
                 copy_columns=copy_columns,
             )
+
+            if has_fincode_fk:
+                rejected_count = int(
+                    conn.execute(
+                        text(f'SELECT COUNT(*) FROM "{staging_table}" WHERE fincode NOT IN (SELECT fincode FROM company_master)')
+                    ).scalar()
+                    or 0
+                )
+                if rejected_count > 0:
+                    conn.execute(
+                        text(f"""
+                            INSERT INTO rejected_ingestion_rows (feed_name, requested_date, reason, row_payload)
+                            SELECT :feed_name, :requested_date, 'Missing fincode in company_master', row_to_json(s.*)::jsonb
+                            FROM "{staging_table}" s
+                            WHERE s.fincode NOT IN (SELECT fincode FROM company_master)
+                        """),
+                        {"feed_name": feed_name, "requested_date": requested_date}
+                    )
+                    conn.execute(
+                        text(f'DELETE FROM "{staging_table}" WHERE fincode NOT IN (SELECT fincode FROM company_master)')
+                    )
+                    total_rejected += rejected_count
 
             upsert_count = int(
                 conn.execute(
@@ -136,4 +164,4 @@ def process_dataframe(
             total_upserted += upsert_count
             total_deleted += delete_count
 
-    return total_upserted, total_deleted
+    return total_upserted, total_deleted, total_rejected

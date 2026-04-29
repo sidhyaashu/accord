@@ -6,7 +6,6 @@ if not DATABASE_URL:
 
 ACCORD_API_TOKEN = os.getenv("ACCORD_API_TOKEN", "")
 API_DATE = os.getenv("API_DATE", "")
-API_MODE = os.getenv("API_MODE", "mock")  # mock or real
 
 ETL_BATCH_SIZE = int(os.getenv("ETL_BATCH_SIZE", "50000"))
 
