@@ -15,12 +15,16 @@ ENABLE_IDEMPOTENCY = os.getenv("ENABLE_IDEMPOTENCY", "true").lower() == "true"
 ENABLE_REJECTED_RETRY = os.getenv("ENABLE_REJECTED_RETRY", "true").lower() == "true"
 MAX_REJECTED_ROW_RETRY = int(os.getenv("MAX_REJECTED_ROW_RETRY", "5"))
 ALLOW_MASS_DELETE = os.getenv("ALLOW_MASS_DELETE", "false").lower() == "true"
-MAX_CONSECUTIVE_FAILURES = int(os.getenv("MAX_CONSECUTIVE_FAILURES", "3"))
-MAX_FEED_CONSECUTIVE_FAILURES = int(os.getenv("MAX_FEED_CONSECUTIVE_FAILURES", "3"))
+
+MAX_FEED_CONSECUTIVE_FAILURES = int(
+    os.getenv("MAX_FEED_CONSECUTIVE_FAILURES", "3")
+)
 
 # RAW PAYLOAD CLEANUP
 RAW_PAYLOAD_RETENTION_DAYS = int(os.getenv("RAW_PAYLOAD_RETENTION_DAYS", "14"))
-ENABLE_RAW_PAYLOAD_CLEANUP = os.getenv("ENABLE_RAW_PAYLOAD_CLEANUP", "true").lower() == "true"
+ENABLE_RAW_PAYLOAD_CLEANUP = (
+    os.getenv("ENABLE_RAW_PAYLOAD_CLEANUP", "true").lower() == "true"
+)
 
 # API CLIENT RETRY CONFIG
 API_MAX_RETRIES = int(os.getenv("API_MAX_RETRIES", "3"))
@@ -31,13 +35,16 @@ API_TIMEOUT_SECONDS = int(os.getenv("API_TIMEOUT_SECONDS", "60"))
 
 # SCHEDULER CONFIG
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Kolkata")
+
 COMPANY_MASTER_HOURS = os.getenv("COMPANY_MASTER_HOURS", "10,13,16,22")
 COMPANY_MASTER_MINUTE = int(os.getenv("COMPANY_MASTER_MINUTE", "35"))
+
 RESULTS_START_HOUR = int(os.getenv("RESULTS_START_HOUR", "9"))
 RESULTS_END_HOUR = int(os.getenv("RESULTS_END_HOUR", "23"))
 RESULTS_MINUTE = int(os.getenv("RESULTS_MINUTE", "5"))
 RESULTS_FINAL_HOUR = int(os.getenv("RESULTS_FINAL_HOUR", "23"))
 RESULTS_FINAL_MINUTE = int(os.getenv("RESULTS_FINAL_MINUTE", "30"))
+
 EOD_HOUR = int(os.getenv("EOD_HOUR", "22"))
 EOD_MINUTE = int(os.getenv("EOD_MINUTE", "45"))
 EOD_RETRY_HOUR = int(os.getenv("EOD_RETRY_HOUR", "23"))
@@ -50,17 +57,23 @@ ENABLE_ALERTS = os.getenv("ENABLE_ALERTS", "true").lower() == "true"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_RAW_PAYLOAD = os.getenv("LOG_RAW_PAYLOAD", "true").lower() == "true"
 
+# INGESTION LOAD ORDER
+# Parent/root feeds first, dependent feeds later.
 LOAD_ORDER = [
+    # Reference/master tables
     "Industrymaster_Ex1",
     "Housemaster",
     "Stockexchangemaster",
     "Registrarmaster",
     "Shp_catmaster_2",
+
+    # Root company dependency
     "Company_master",
     "Companyaddress",
     "Board",
     "Registrardata",
-    "Complistings",
+
+    # Financial statements
     "Finance_bs",
     "Finance_cons_bs",
     "Finance_pl",
@@ -69,12 +82,23 @@ LOAD_ORDER = [
     "Finance_cons_cf",
     "Finance_fr",
     "Finance_cons_fr",
+
+    # Results
     "Resultsf_IND_Ex1",
     "Resultsf_IND_Cons_Ex1",
+
+    # Equity identity feeds before listing/price feeds
     "company_equity",
     "company_equity_cons",
+
+    # Listing after company/equity identity
+    "Complistings",
+
+    # Shareholding
     "Shpsummary",
     "Shp_details",
+
+    # Price feeds last
     "Monthlyprice",
     "Nse_Monthprice",
 ]
@@ -84,28 +108,34 @@ PRIMARY_KEYS = {
     "industrymaster_ex1": ["ind_code"],
     "housemaster": ["house_code"],
     "stockexchangemaster": ["stk_id"],
-    "complistings": ["fincode", "stk_id"],
-    "companyaddress": ["fincode"],
     "registrarmaster": ["registrarno"],
-    "registrardata": ["fincode", "registrarno"],
+    "shp_catmaster_2": ["shp_catid"],
+
+    "companyaddress": ["fincode"],
     "board": ["fincode", "yrc", "serialno", "dirtype_id"],
+    "registrardata": ["fincode", "registrarno"],
+    "complistings": ["fincode", "stk_id"],
+
     "finance_bs": ["fincode", "year_end", "type"],
-    "finance_cf": ["fincode", "year_end", "type"],
-    "finance_pl": ["fincode", "year_end", "type"],
-    "finance_fr": ["fincode", "year_end", "type"],
     "finance_cons_bs": ["fincode", "year_end", "type"],
-    "finance_cons_cf": ["fincode", "year_end", "type"],
+    "finance_pl": ["fincode", "year_end", "type"],
     "finance_cons_pl": ["fincode", "year_end", "type"],
+    "finance_cf": ["fincode", "year_end", "type"],
+    "finance_cons_cf": ["fincode", "year_end", "type"],
+    "finance_fr": ["fincode", "year_end", "type"],
     "finance_cons_fr": ["fincode", "year_end", "type"],
+
     "resultsf_ind_ex1": ["fincode", "result_type", "date_end"],
     "resultsf_ind_cons_ex1": ["fincode", "result_type", "date_end"],
+
     "company_equity": ["fincode"],
     "company_equity_cons": ["fincode"],
+
+    "shpsummary": ["fincode", "date_end"],
     "shp_details": ["fincode", "date_end", "srno"],
-    "shp_catmaster_2": ["shp_catid"],
+
     "monthlyprice": ["fincode", "month", "year"],
     "nse_monthprice": ["fincode", "month", "year"],
-    "shpsummary": ["fincode", "date_end"],
 }
 
 COLUMN_RENAMES = {

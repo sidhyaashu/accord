@@ -73,6 +73,12 @@ def build_upsert_sql(
     """
 
 
+def generate_payload_hash(payload: dict) -> str:
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+
+
 def process_dataframe(
     engine: Engine,
     table_name: str,
@@ -105,7 +111,8 @@ def process_dataframe(
     total_upserted = 0
     total_deleted = 0
     total_rejected = 0
-    
+
+    # All child feeds depending on company_master
     has_fincode_fk = "fincode" in df.columns and table_name != "company_master"
 
     for chunk in chunk_dataframe(df, ETL_BATCH_SIZE):
@@ -119,63 +126,113 @@ def process_dataframe(
                 copy_columns=copy_columns,
             )
 
+            # ======================================================
+            # FK VALIDATION + SAFE REJECTED ROW PARKING
+            # ======================================================
             if has_fincode_fk:
                 rejected_count = int(
                     conn.execute(
-                        text(f'SELECT COUNT(*) FROM "{staging_table}" s WHERE NOT EXISTS (SELECT 1 FROM company_master cm WHERE cm.fincode = s.fincode)')
+                        text(
+                            f'''SELECT COUNT(*)
+                                FROM "{staging_table}" s
+                                WHERE NOT EXISTS (
+                                    SELECT 1
+                                    FROM company_master cm
+                                    WHERE cm.fincode = s.fincode
+                                )'''
+                        )
                     ).scalar()
                     or 0
                 )
+
                 if rejected_count > 0:
-                    # insert with payload hash for deduplication
-                    conn.execute(
-                        text(f"""
-                            INSERT INTO rejected_ingestion_rows
-                                (feed_name, requested_date, reason, row_payload, payload_hash)
-                            SELECT
-                                :feed_name,
-                                :requested_date,
-                                'Missing fincode in company_master',
-                                row_to_json(s.*)::jsonb,
-                                encode(sha256(row_to_json(s.*)::text::bytea), 'hex')
+                    invalid_rows = conn.execute(
+                        text(
+                            f'''
+                            SELECT row_to_json(s.*)::jsonb AS row_payload
                             FROM "{staging_table}" s
-                            WHERE NOT EXISTS (SELECT 1 FROM company_master cm WHERE cm.fincode = s.fincode)
-                            ON CONFLICT (feed_name, requested_date, payload_hash) DO NOTHING
-                        """),
-                        {{"feed_name": feed_name, "requested_date": requested_date}}
-                    )
+                            WHERE NOT EXISTS (
+                                SELECT 1
+                                FROM company_master cm
+                                WHERE cm.fincode = s.fincode
+                            )
+                            '''
+                        )
+                    ).fetchall()
+
+                    for invalid_row in invalid_rows:
+                        row_payload = invalid_row.row_payload
+                        payload_hash = generate_payload_hash(row_payload)
+
+                        conn.execute(
+                            text(
+                                """
+                                INSERT INTO rejected_ingestion_rows
+                                    (feed_name, requested_date, reason, row_payload, payload_hash)
+                                VALUES
+                                    (:feed_name, :requested_date, :reason, CAST(:row_payload AS JSONB), :payload_hash)
+                                ON CONFLICT (feed_name, requested_date, payload_hash) DO NOTHING
+                                """
+                            ),
+                            {
+                                "feed_name": feed_name,
+                                "requested_date": requested_date,
+                                "reason": "Missing fincode in company_master",
+                                "row_payload": json.dumps(row_payload, default=str),
+                                "payload_hash": payload_hash,
+                            },
+                        )
+
+                    # Remove invalid rows so valid rows continue processing
                     conn.execute(
-                        text(f'''
+                        text(
+                            f'''
                             DELETE FROM "{staging_table}" s
                             WHERE NOT EXISTS (
                                 SELECT 1
                                 FROM company_master cm
                                 WHERE cm.fincode = s.fincode
                             )
-                        ''')
+                            '''
+                        )
                     )
+
                     total_rejected += rejected_count
 
+            # ======================================================
+            # UPSERT / DELETE COUNTS
+            # ======================================================
             upsert_count = int(
                 conn.execute(
-                    text(f'SELECT COUNT(*) FROM "{staging_table}" WHERE flag IN (\'A\', \'O\')')
+                    text(f'''SELECT COUNT(*) FROM "{staging_table}" WHERE flag IN ('A', 'O')''')
                 ).scalar()
                 or 0
             )
 
             delete_count = int(
                 conn.execute(
-                    text(f'SELECT COUNT(*) FROM "{staging_table}" WHERE flag = \'D\'')
+                    text(f"SELECT COUNT(*) FROM \"{staging_table}\" WHERE flag = 'D'")
                 ).scalar()
                 or 0
             )
 
+            # ======================================================
+            # DELETE FLOW
+            # ======================================================
             if delete_count:
                 conn.execute(text(build_delete_sql(table_name, staging_table, pk_cols)))
 
+            # ======================================================
+            # UPSERT FLOW
+            # ======================================================
             if upsert_count:
-                conn.execute(text(build_upsert_sql(table_name, staging_table, insert_cols, pk_cols)))
+                conn.execute(
+                    text(build_upsert_sql(table_name, staging_table, insert_cols, pk_cols))
+                )
 
+            # ======================================================
+            # CLEANUP
+            # ======================================================
             conn.execute(text(f'DROP TABLE IF EXISTS "{staging_table}"'))
 
             total_upserted += upsert_count
