@@ -82,7 +82,11 @@ def retry_rejected_rows(engine: Engine) -> dict:
                     send_alert("Max Retries Exceeded", f"Rejected row {row_id} for {feed_name} has exhausted all {MAX_REJECTED_ROW_RETRY} retries and remains unresolved.")
                 summary["still_pending"] += 1
                 
-        except Exception:
+        except Exception as e:
+            send_alert(
+                "Rejected Row Retry Failed",
+                f"row_id={row_id}, feed={feed_name}, retry={retry_count + 1}, error={str(e)}"
+            )
             _increment_retry(engine, row_id, retry_count)
             summary["failed"] += 1
             

@@ -135,7 +135,14 @@ def process_dataframe(
                         {"feed_name": feed_name, "requested_date": requested_date}
                     )
                     conn.execute(
-                        text(f'DELETE FROM "{staging_table}" WHERE NOT EXISTS (SELECT 1 FROM company_master cm WHERE cm.fincode = "{staging_table}".fincode)')
+                        text(f'''
+                            DELETE FROM "{staging_table}" s
+                            WHERE NOT EXISTS (
+                                SELECT 1
+                                FROM company_master cm
+                                WHERE cm.fincode = s.fincode
+                            )
+                        ''')
                     )
                     total_rejected += rejected_count
 
