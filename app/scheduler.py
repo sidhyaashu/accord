@@ -1,5 +1,7 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
 from app.api_main import run_incremental_for_feeds
+from app.db import build_engine
+from app.retry_service import retry_rejected_rows
 
 
 COMPANY_MASTER_FEEDS = [
@@ -51,12 +53,19 @@ from app.config import (
     EOD_HOUR, EOD_MINUTE, EOD_RETRY_HOUR, EOD_RETRY_MINUTE
 )
 
+def run_feeds_with_retry(feeds: list[str]):
+    run_incremental_for_feeds(feeds)
+    engine = build_engine()
+    print("\n🔄 Running retry service for rejected rows...")
+    summary = retry_rejected_rows(engine)
+    print(f"🔄 Retry summary: {summary}\n")
+
 def main():
     scheduler = BlockingScheduler(timezone=TIMEZONE)
 
     # Company Master: Intraday 4 times
     scheduler.add_job(
-        lambda: run_incremental_for_feeds(COMPANY_MASTER_FEEDS),
+        lambda: run_feeds_with_retry(COMPANY_MASTER_FEEDS),
         "cron",
         hour=COMPANY_MASTER_HOURS,
         minute=COMPANY_MASTER_MINUTE,
@@ -66,7 +75,7 @@ def main():
 
     # Results: Every 1 hour from 9 AM to 11:30 PM
     scheduler.add_job(
-        lambda: run_incremental_for_feeds(RESULTS_HOURLY_FEEDS),
+        lambda: run_feeds_with_retry(RESULTS_HOURLY_FEEDS),
         "cron",
         hour=f"{RESULTS_START_HOUR}-{RESULTS_END_HOUR}",
         minute=RESULTS_MINUTE,
@@ -76,7 +85,7 @@ def main():
 
     # Extra final result check near 11:30 PM
     scheduler.add_job(
-        lambda: run_incremental_for_feeds(RESULTS_HOURLY_FEEDS),
+        lambda: run_feeds_with_retry(RESULTS_HOURLY_FEEDS),
         "cron",
         hour=RESULTS_FINAL_HOUR,
         minute=RESULTS_FINAL_MINUTE,
@@ -86,7 +95,7 @@ def main():
 
     # EOD feeds: vendor timing 10:30 PM, run after delay
     scheduler.add_job(
-        lambda: run_incremental_for_feeds(EOD_FEEDS),
+        lambda: run_feeds_with_retry(EOD_FEEDS),
         "cron",
         hour=EOD_HOUR,
         minute=EOD_MINUTE,
@@ -96,7 +105,7 @@ def main():
 
     # Retry EOD feeds in case vendor data is delayed
     scheduler.add_job(
-        lambda: run_incremental_for_feeds(EOD_FEEDS),
+        lambda: run_feeds_with_retry(EOD_FEEDS),
         "cron",
         hour=EOD_RETRY_HOUR,
         minute=EOD_RETRY_MINUTE,

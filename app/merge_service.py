@@ -120,7 +120,7 @@ def process_dataframe(
             if has_fincode_fk:
                 rejected_count = int(
                     conn.execute(
-                        text(f'SELECT COUNT(*) FROM "{staging_table}" WHERE fincode NOT IN (SELECT fincode FROM company_master)')
+                        text(f'SELECT COUNT(*) FROM "{staging_table}" s WHERE NOT EXISTS (SELECT 1 FROM company_master cm WHERE cm.fincode = s.fincode)')
                     ).scalar()
                     or 0
                 )
@@ -130,12 +130,12 @@ def process_dataframe(
                             INSERT INTO rejected_ingestion_rows (feed_name, requested_date, reason, row_payload)
                             SELECT :feed_name, :requested_date, 'Missing fincode in company_master', row_to_json(s.*)::jsonb
                             FROM "{staging_table}" s
-                            WHERE s.fincode NOT IN (SELECT fincode FROM company_master)
+                            WHERE NOT EXISTS (SELECT 1 FROM company_master cm WHERE cm.fincode = s.fincode)
                         """),
                         {"feed_name": feed_name, "requested_date": requested_date}
                     )
                     conn.execute(
-                        text(f'DELETE FROM "{staging_table}" WHERE fincode NOT IN (SELECT fincode FROM company_master)')
+                        text(f'DELETE FROM "{staging_table}" WHERE NOT EXISTS (SELECT 1 FROM company_master cm WHERE cm.fincode = "{staging_table}".fincode)')
                     )
                     total_rejected += rejected_count
 

@@ -47,4 +47,6 @@ def fetch_accord_feed(filename: str, date_ddmmyyyy: str, token: str) -> tuple[in
             if attempt < max_attempts - 1:
                 time.sleep(backoff_times[attempt])
                 continue
-            raise RuntimeError(f"Request failed after {max_attempts} attempts: {e}")
+            raise RuntimeError(f"Request failed after {max_attempts} attempts: {e}")
+
+    raise RuntimeError(f"API failed after {max_attempts} retries")

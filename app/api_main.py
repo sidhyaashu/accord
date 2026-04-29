@@ -14,13 +14,7 @@ from app.merge_service import process_dataframe
 from app.normalizer import apply_renames, payload_to_dataframe
 from app.validation_service import validate_payload_df
 from app.alert_service import send_alert
-
-
-def resolve_table_name(engine, feed_name: str) -> str | None:
-    inspector = inspect(engine)
-    db_tables = inspector.get_table_names()
-
-    return next((t for t in db_tables if t.lower() == feed_name.lower()), None)
+from app.utils import resolve_table_name
 
 
 def run_incremental_for_feeds(feeds: list[str], override_date: str = None, force: bool = False) -> None:
@@ -89,7 +83,7 @@ def process_single_feed(engine, feed_name: str, date_ddmmyyyy: str, requested_da
             update_daily_summary(engine, requested_date)
             return False
 
-        if LOG_RAW_PAYLOAD:
+        if LOG_RAW_PAYLOAD and http_status != 204:
             save_raw_payload(engine, feed_name, requested_date, payload)
 
         df = payload_to_dataframe(payload)
@@ -169,7 +163,7 @@ def run_backfill_last_7_days() -> None:
     today = datetime.datetime.now().date()
     
     # fetch missing dates in chronological order (oldest first)
-    for i in range(7, -1, -1):
+    for i in range(6, -1, -1):
         backfill_date = today - datetime.timedelta(days=i)
         date_ddmmyyyy = backfill_date.strftime("%d%m%Y")
         print(f"\n⏳ Running backfill for {date_ddmmyyyy}")

@@ -2,7 +2,8 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from app.api_main import resolve_table_name
+from app.alert_service import send_alert
+from app.utils import resolve_table_name
 from app.merge_service import process_dataframe
 from app.config import ENABLE_REJECTED_RETRY, MAX_REJECTED_ROW_RETRY
 
@@ -72,9 +73,13 @@ def retry_rejected_rows(engine: Engine) -> dict:
                     summary["resolved"] += 1
                 else:
                     _increment_retry(engine, row_id, retry_count)
+                    if retry_count + 1 >= MAX_REJECTED_ROW_RETRY:
+                        send_alert("Max Retries Exceeded", f"Rejected row {row_id} for {feed_name} has exhausted all {MAX_REJECTED_ROW_RETRY} retries and remains unresolved.")
                     summary["still_pending"] += 1
             else:
                 _increment_retry(engine, row_id, retry_count)
+                if retry_count + 1 >= MAX_REJECTED_ROW_RETRY:
+                    send_alert("Max Retries Exceeded", f"Rejected row {row_id} for {feed_name} has exhausted all {MAX_REJECTED_ROW_RETRY} retries and remains unresolved.")
                 summary["still_pending"] += 1
                 
         except Exception:

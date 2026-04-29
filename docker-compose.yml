@@ -6,6 +6,13 @@ services:
       - .env
     ports:
       - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d financial_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   scheduler:
     build: .
@@ -16,7 +23,8 @@ services:
       - .:/app
     command: ["python", "-m", "app.scheduler"]
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   api_manual:
     build: .
@@ -27,7 +35,8 @@ services:
       - .:/app
     command: ["python", "-m", "app.api_main"]
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   backfill:
     build: .
@@ -38,4 +47,8 @@ services:
       - .:/app
     command: ["python", "-c", "from app.api_main import run_backfill_last_7_days; run_backfill_last_7_days()"]
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+
+volumes:
+  pg_data:
