@@ -8,8 +8,42 @@ ACCORD_API_TOKEN = os.getenv("ACCORD_API_TOKEN", "")
 API_DATE = os.getenv("API_DATE", "")
 
 ETL_BATCH_SIZE = int(os.getenv("ETL_BATCH_SIZE", "50000"))
-
 SQL_DIR = os.getenv("SQL_DIR", "/app/sql")
+
+# API INGESTION HARDENING
+ENABLE_IDEMPOTENCY = os.getenv("ENABLE_IDEMPOTENCY", "true").lower() == "true"
+ENABLE_REJECTED_RETRY = os.getenv("ENABLE_REJECTED_RETRY", "true").lower() == "true"
+MAX_REJECTED_ROW_RETRY = int(os.getenv("MAX_REJECTED_ROW_RETRY", "5"))
+ALLOW_MASS_DELETE = os.getenv("ALLOW_MASS_DELETE", "false").lower() == "true"
+MAX_CONSECUTIVE_FAILURES = int(os.getenv("MAX_CONSECUTIVE_FAILURES", "3"))
+
+# API CLIENT RETRY CONFIG
+API_MAX_RETRIES = int(os.getenv("API_MAX_RETRIES", "3"))
+API_RETRY_BACKOFF_1 = int(os.getenv("API_RETRY_BACKOFF_1", "2"))
+API_RETRY_BACKOFF_2 = int(os.getenv("API_RETRY_BACKOFF_2", "5"))
+API_RETRY_BACKOFF_3 = int(os.getenv("API_RETRY_BACKOFF_3", "10"))
+API_TIMEOUT_SECONDS = int(os.getenv("API_TIMEOUT_SECONDS", "60"))
+
+# SCHEDULER CONFIG
+TIMEZONE = os.getenv("TIMEZONE", "Asia/Kolkata")
+COMPANY_MASTER_HOURS = os.getenv("COMPANY_MASTER_HOURS", "10,13,16,22")
+COMPANY_MASTER_MINUTE = int(os.getenv("COMPANY_MASTER_MINUTE", "35"))
+RESULTS_START_HOUR = int(os.getenv("RESULTS_START_HOUR", "9"))
+RESULTS_END_HOUR = int(os.getenv("RESULTS_END_HOUR", "23"))
+RESULTS_MINUTE = int(os.getenv("RESULTS_MINUTE", "5"))
+RESULTS_FINAL_HOUR = int(os.getenv("RESULTS_FINAL_HOUR", "23"))
+RESULTS_FINAL_MINUTE = int(os.getenv("RESULTS_FINAL_MINUTE", "30"))
+EOD_HOUR = int(os.getenv("EOD_HOUR", "22"))
+EOD_MINUTE = int(os.getenv("EOD_MINUTE", "45"))
+EOD_RETRY_HOUR = int(os.getenv("EOD_RETRY_HOUR", "23"))
+EOD_RETRY_MINUTE = int(os.getenv("EOD_RETRY_MINUTE", "30"))
+
+# ALERTING
+ENABLE_ALERTS = os.getenv("ENABLE_ALERTS", "true").lower() == "true"
+
+# LOGGING
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOG_RAW_PAYLOAD = os.getenv("LOG_RAW_PAYLOAD", "true").lower() == "true"
 
 LOAD_ORDER = [
     "Industrymaster_Ex1",

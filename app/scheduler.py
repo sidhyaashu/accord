@@ -44,15 +44,22 @@ EOD_FEEDS = [
 ]
 
 
+from app.config import (
+    TIMEZONE, COMPANY_MASTER_HOURS, COMPANY_MASTER_MINUTE,
+    RESULTS_START_HOUR, RESULTS_END_HOUR, RESULTS_MINUTE,
+    RESULTS_FINAL_HOUR, RESULTS_FINAL_MINUTE,
+    EOD_HOUR, EOD_MINUTE, EOD_RETRY_HOUR, EOD_RETRY_MINUTE
+)
+
 def main():
-    scheduler = BlockingScheduler(timezone="Asia/Kolkata")
+    scheduler = BlockingScheduler(timezone=TIMEZONE)
 
     # Company Master: Intraday 4 times
     scheduler.add_job(
         lambda: run_incremental_for_feeds(COMPANY_MASTER_FEEDS),
         "cron",
-        hour="10,13,16,22",
-        minute=35,
+        hour=COMPANY_MASTER_HOURS,
+        minute=COMPANY_MASTER_MINUTE,
         id="company_master_intraday",
         replace_existing=True,
     )
@@ -61,8 +68,8 @@ def main():
     scheduler.add_job(
         lambda: run_incremental_for_feeds(RESULTS_HOURLY_FEEDS),
         "cron",
-        hour="9-23",
-        minute=5,
+        hour=f"{RESULTS_START_HOUR}-{RESULTS_END_HOUR}",
+        minute=RESULTS_MINUTE,
         id="results_hourly",
         replace_existing=True,
     )
@@ -71,8 +78,8 @@ def main():
     scheduler.add_job(
         lambda: run_incremental_for_feeds(RESULTS_HOURLY_FEEDS),
         "cron",
-        hour=23,
-        minute=30,
+        hour=RESULTS_FINAL_HOUR,
+        minute=RESULTS_FINAL_MINUTE,
         id="results_final_2330",
         replace_existing=True,
     )
@@ -81,8 +88,8 @@ def main():
     scheduler.add_job(
         lambda: run_incremental_for_feeds(EOD_FEEDS),
         "cron",
-        hour=22,
-        minute=45,
+        hour=EOD_HOUR,
+        minute=EOD_MINUTE,
         id="eod_feeds_2245",
         replace_existing=True,
     )
@@ -91,8 +98,8 @@ def main():
     scheduler.add_job(
         lambda: run_incremental_for_feeds(EOD_FEEDS),
         "cron",
-        hour=23,
-        minute=30,
+        hour=EOD_RETRY_HOUR,
+        minute=EOD_RETRY_MINUTE,
         id="eod_retry_2330",
         replace_existing=True,
     )

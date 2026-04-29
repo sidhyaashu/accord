@@ -22,6 +22,24 @@ CREATE TABLE IF NOT EXISTS rejected_ingestion_rows (
     row_payload JSONB NOT NULL,
     created_at TIMESTAMP DEFAULT now()
 );
+
+ALTER TABLE rejected_ingestion_rows ADD COLUMN IF NOT EXISTS retry_count INT DEFAULT 0;
+ALTER TABLE rejected_ingestion_rows ADD COLUMN IF NOT EXISTS resolved BOOLEAN DEFAULT FALSE;
+ALTER TABLE rejected_ingestion_rows ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP NULL;
+ALTER TABLE rejected_ingestion_rows ADD COLUMN IF NOT EXISTS last_retry_at TIMESTAMP NULL;
+
+CREATE TABLE IF NOT EXISTS daily_ingestion_summary (
+    summary_date DATE PRIMARY KEY,
+    feeds_success INT DEFAULT 0,
+    feeds_failed INT DEFAULT 0,
+    rows_received BIGINT DEFAULT 0,
+    rows_upserted BIGINT DEFAULT 0,
+    rows_deleted BIGINT DEFAULT 0,
+    rows_rejected BIGINT DEFAULT 0,
+    total_duration_seconds BIGINT DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS raw_api_payloads (
     id BIGSERIAL PRIMARY KEY,
     feed_name TEXT NOT NULL,
